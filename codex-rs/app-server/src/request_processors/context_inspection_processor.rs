@@ -9,6 +9,12 @@ use codex_app_server_protocol::ContextInspectionLimits;
 use codex_app_server_protocol::ContextInspectionSnapshot;
 use codex_app_server_protocol::ContextNormalizationSummary;
 use codex_app_server_protocol::JSONRPCErrorError;
+use codex_app_server_protocol::ModelRequestAttemptStatus;
+use codex_app_server_protocol::ModelRequestComponentSummary;
+use codex_app_server_protocol::ModelRequestInspection;
+use codex_app_server_protocol::ModelRequestSnapshot;
+use codex_app_server_protocol::ModelRequestTransport;
+use codex_app_server_protocol::ModelRequestValueCollectionSummary;
 use codex_app_server_protocol::ThreadContextInspectParams;
 use codex_app_server_protocol::ThreadContextInspectResponse;
 use codex_core::ContextInspectionLimits as CoreContextInspectionLimits;
@@ -67,6 +73,66 @@ fn api_context_inspection_snapshot(snapshot: CurrentContextSnapshot) -> ContextI
             normalized_only_items: snapshot.normalization.normalized_only_items,
             changed: snapshot.normalization.changed,
         },
+        request: api_model_request_inspection(snapshot.request),
+    }
+}
+
+fn api_model_request_inspection(
+    inspection: codex_core::ModelRequestInspection,
+) -> ModelRequestInspection {
+    ModelRequestInspection {
+        latest_attempt: inspection.latest_attempt.map(api_model_request_snapshot),
+        last_actual: inspection.last_actual.map(api_model_request_snapshot),
+        current_normalized_matches_last_actual: inspection.current_normalized_matches_last_actual,
+    }
+}
+
+fn api_model_request_snapshot(snapshot: codex_core::ModelRequestSnapshot) -> ModelRequestSnapshot {
+    ModelRequestSnapshot {
+        sequence: snapshot.sequence,
+        captured_at: snapshot.captured_at,
+        status: match snapshot.status {
+            codex_core::ModelRequestAttemptStatus::Prepared => ModelRequestAttemptStatus::Prepared,
+            codex_core::ModelRequestAttemptStatus::StreamOpened => {
+                ModelRequestAttemptStatus::StreamOpened
+            }
+            codex_core::ModelRequestAttemptStatus::Failed => ModelRequestAttemptStatus::Failed,
+        },
+        transport: match snapshot.transport {
+            codex_core::ModelRequestTransport::ResponsesHttp => {
+                ModelRequestTransport::ResponsesHttp
+            }
+            codex_core::ModelRequestTransport::ResponsesWebsocket => {
+                ModelRequestTransport::ResponsesWebsocket
+            }
+        },
+        transport_uses_delta: snapshot.transport_uses_delta,
+        connection_reused: snapshot.connection_reused,
+        transport_input_items: snapshot.transport_input_items,
+        model: snapshot.model,
+        provider: snapshot.provider,
+        fingerprint: snapshot.fingerprint,
+        serialized_bytes: snapshot.serialized_bytes,
+        normalized_input: api_context_inspection_collection(snapshot.normalized_input),
+        provider_input: api_context_inspection_collection(snapshot.provider_input),
+        instructions: snapshot.instructions.map(api_model_request_component),
+        tools: snapshot
+            .tools
+            .map(|tools| ModelRequestValueCollectionSummary {
+                fingerprint: tools.fingerprint,
+                total_items: tools.total_items,
+                serialized_bytes: tools.serialized_bytes,
+            }),
+        output_schema: snapshot.output_schema.map(api_model_request_component),
+    }
+}
+
+fn api_model_request_component(
+    component: codex_core::ModelRequestComponentSummary,
+) -> ModelRequestComponentSummary {
+    ModelRequestComponentSummary {
+        fingerprint: component.fingerprint,
+        serialized_bytes: component.serialized_bytes,
     }
 }
 

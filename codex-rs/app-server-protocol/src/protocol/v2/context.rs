@@ -34,6 +34,8 @@ pub struct ContextInspectionSnapshot {
     /// Current history after production prompt normalization.
     pub normalized: ContextInspectionCollection,
     pub normalization: ContextNormalizationSummary,
+    /// Latest request attempt and latest request that opened a provider response stream.
+    pub request: ModelRequestInspection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -88,4 +90,76 @@ pub struct ContextNormalizationSummary {
 pub enum ContextContentDisclosure {
     /// Only bounded metadata is disclosed; content, arguments, outputs, schemas, and IDs are not.
     MetadataOnly,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ModelRequestInspection {
+    pub latest_attempt: Option<ModelRequestSnapshot>,
+    pub last_actual: Option<ModelRequestSnapshot>,
+    /// Whether current normalized history exactly matches `lastActual.normalizedInput`.
+    pub current_normalized_matches_last_actual: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ModelRequestSnapshot {
+    pub sequence: u64,
+    /// Unix timestamp in seconds when the request was prepared.
+    pub captured_at: i64,
+    pub status: ModelRequestAttemptStatus,
+    pub transport: ModelRequestTransport,
+    /// Whether the WebSocket transport sent a delta with `previousResponseId`.
+    pub transport_uses_delta: bool,
+    /// Whether the WebSocket connection was reused. Always false for HTTP.
+    pub connection_reused: bool,
+    pub transport_input_items: u64,
+    pub model: String,
+    pub provider: String,
+    /// Identity and size of the complete logical request, not a WebSocket delta payload.
+    pub fingerprint: String,
+    pub serialized_bytes: u64,
+    /// Production prompt input before provider-specific adaptation.
+    pub normalized_input: ContextInspectionCollection,
+    /// Complete logical provider input after provider-specific adaptation.
+    pub provider_input: ContextInspectionCollection,
+    pub instructions: Option<ModelRequestComponentSummary>,
+    pub tools: Option<ModelRequestValueCollectionSummary>,
+    pub output_schema: Option<ModelRequestComponentSummary>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ModelRequestComponentSummary {
+    pub fingerprint: String,
+    pub serialized_bytes: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ModelRequestValueCollectionSummary {
+    pub fingerprint: String,
+    pub total_items: u64,
+    pub serialized_bytes: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase", export_to = "v2/")]
+pub enum ModelRequestAttemptStatus {
+    Prepared,
+    StreamOpened,
+    Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase", export_to = "v2/")]
+pub enum ModelRequestTransport {
+    ResponsesHttp,
+    ResponsesWebsocket,
 }
