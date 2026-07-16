@@ -144,6 +144,7 @@ Example with notification opt-out:
 - `thread/list` — page through stored threads; supports cursor-based pagination and optional `modelProviders`, `sourceKinds`, `archived`, `cwd`, and `searchTerm` filters. Experimental clients can use `parentThreadId` for direct spawned children or `ancestorThreadId` for spawned descendants at any depth; the two filters are mutually exclusive. Review and Guardian threads are not included because they do not participate in that spawn-edge lifecycle. Each returned `thread` includes `status` (`ThreadStatus`), defaulting to `notLoaded` when the thread is not currently loaded. Subagent threads also include `parentThreadId` when the immediate parent is known.
 - `thread/loaded/list` — list the thread ids currently loaded in memory.
 - `thread/read` — read a stored thread by id without resuming it; optionally include turns via `includeTurns`. The returned `thread` includes `status` (`ThreadStatus`), defaulting to `notLoaded` when the thread is not currently loaded.
+- `thread/contextInspect` — experimental; inspect a loaded thread's current model-context history without starting a turn or mutating the thread. The response contains metadata-only projections of raw history and the same normalized history used for prompt input, plus fingerprints, serialized sizes, and a normalization summary. Optional `maxItems` limits item metadata records and is clamped to a server hard limit; complete content, arguments, outputs, schemas, and IDs are not returned.
 - `thread/turns/list` — experimental; page through a stored thread’s turn history without resuming it; supports cursor-based pagination with `sortDirection`, `itemsView`, `nextCursor`, and `backwardsCursor`.
 - `thread/items/list` — experimental; page through persisted thread items without resuming the thread. Pass `turnId` to restrict results to one turn, or omit it to page items across the thread. The active thread store must support item pagination.
 - `thread/metadata/update` — patch stored thread metadata in sqlite; currently supports updating persisted `gitInfo` fields and returns the refreshed `thread`.
@@ -504,6 +505,14 @@ Paginated threads support metadata-only reads; `includeTurns: true` is unsupport
 { "id": 23, "result": {
     "thread": { "id": "thr_123", "status": { "type": "notLoaded" }, "turns": [ ... ] }
 } }
+```
+
+### Example: Inspect current model context (experimental)
+
+Use `thread/contextInspect` with `capabilities.experimentalApi = true` to inspect a thread that is currently loaded. This is a read-only, metadata-only current-history view: `raw` describes recorded history, while `normalized` describes that same history after production prompt normalization. It does not include pending input, future turn injections, tool schemas, base instructions, or a previous provider request.
+
+```json
+{ "method": "thread/contextInspect", "id": 24, "params": { "threadId": "thr_123", "maxItems": 128 } }
 ```
 
 ### Example: List thread turns (experimental)

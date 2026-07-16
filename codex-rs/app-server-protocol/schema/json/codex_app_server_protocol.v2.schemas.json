@@ -5177,6 +5177,181 @@
       "title": "ContextCompactedNotification",
       "type": "object"
     },
+    "ContextContentDisclosure": {
+      "oneOf": [
+        {
+          "description": "Only bounded metadata is disclosed; content, arguments, outputs, schemas, and IDs are not.",
+          "enum": [
+            "metadataOnly"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "ContextInspectionCollection": {
+      "properties": {
+        "fingerprint": {
+          "description": "Versioned SHA-256 fingerprint of all complete serialized items in order.",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/definitions/ContextInspectionItem"
+          },
+          "type": "array"
+        },
+        "omittedItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "representedItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "totalItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "totalSerializedBytes": {
+          "description": "Sum of complete serialized item sizes, including undisclosed content.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fingerprint",
+        "items",
+        "omittedItems",
+        "representedItems",
+        "totalItems",
+        "totalSerializedBytes"
+      ],
+      "type": "object"
+    },
+    "ContextInspectionItem": {
+      "properties": {
+        "index": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Bounded serialized response item type tag.",
+          "type": "string"
+        },
+        "role": {
+          "description": "Bounded serialized role when the item has one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serializedBytes": {
+          "description": "Size of the complete serialized item, including undisclosed content.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "serializedBytes"
+      ],
+      "type": "object"
+    },
+    "ContextInspectionLimits": {
+      "properties": {
+        "maxItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxItems"
+      ],
+      "type": "object"
+    },
+    "ContextInspectionSnapshot": {
+      "properties": {
+        "appliedLimits": {
+          "$ref": "#/definitions/ContextInspectionLimits"
+        },
+        "contentDisclosure": {
+          "$ref": "#/definitions/ContextContentDisclosure"
+        },
+        "historyVersion": {
+          "description": "History rewrite generation from the live context manager.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "normalization": {
+          "$ref": "#/definitions/ContextNormalizationSummary"
+        },
+        "normalized": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ContextInspectionCollection"
+            }
+          ],
+          "description": "Current history after production prompt normalization."
+        },
+        "raw": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ContextInspectionCollection"
+            }
+          ],
+          "description": "Current history before production prompt normalization."
+        }
+      },
+      "required": [
+        "appliedLimits",
+        "contentDisclosure",
+        "historyVersion",
+        "normalization",
+        "normalized",
+        "raw"
+      ],
+      "type": "object"
+    },
+    "ContextNormalizationSummary": {
+      "properties": {
+        "changed": {
+          "description": "Whether normalization changed item identity, count, or order.",
+          "type": "boolean"
+        },
+        "normalizedOnlyItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "rawOnlyItems": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "unchangedItems": {
+          "description": "Items with identical complete serialization in both collections, counted as a multiset.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "changed",
+        "normalizedOnlyItems",
+        "rawOnlyItems",
+        "unchangedItems"
+      ],
+      "type": "object"
+    },
     "ConversationTextRole": {
       "enum": [
         "user",

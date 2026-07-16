@@ -515,6 +515,7 @@ mod bedrock_auth;
 mod catalog_processor;
 mod command_exec_processor;
 mod config_processor;
+mod context_inspection_processor;
 mod environment_processor;
 mod feedback_doctor_report;
 mod feedback_processor;
