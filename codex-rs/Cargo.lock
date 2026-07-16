@@ -2609,6 +2609,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-context-inspector"
+version = "0.0.0"
+dependencies = [
+ "codex-protocol",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "codex-core"
 version = "0.0.0"
 dependencies = [
@@ -2631,6 +2643,7 @@ dependencies = [
  "codex-config",
  "codex-connectors",
  "codex-context-fragments",
+ "codex-context-inspector",
  "codex-core-plugins",
  "codex-core-skills",
  "codex-exec-server",

@@ -1,3 +1,6 @@
+use crate::ContextInspectionError;
+use crate::ContextInspectionLimits;
+use crate::CurrentContextSnapshot;
 use crate::agent::AgentStatus;
 use crate::config::ConstraintResult;
 use crate::elicitation::ElicitationRegistration;
@@ -561,6 +564,16 @@ impl CodexThread {
 
     pub async fn config_snapshot(&self) -> ThreadConfigSnapshot {
         self.session.thread_config_snapshot().await
+    }
+
+    /// Returns a bounded, metadata-only snapshot of current raw and model-normalized history.
+    ///
+    /// This does not run turn hooks, mutate history, write rollout items, or issue a model request.
+    pub async fn inspect_current_context(
+        &self,
+        limits: ContextInspectionLimits,
+    ) -> Result<CurrentContextSnapshot, ContextInspectionError> {
+        self.session.inspect_current_context(limits).await
     }
 
     /// Returns the files that supplied the thread's loaded model instructions.
