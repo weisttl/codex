@@ -28,7 +28,9 @@ impl Session {
             .get_model_info(&model, &config.to_models_manager_config())
             .await;
 
+        let request_inspection = self.services.model_client.inspect_model_requests(limits);
         inspect_history(&history, &model_info.input_modalities, limits)
+            .map(|snapshot| snapshot.with_request_inspection(request_inspection))
     }
 }
 

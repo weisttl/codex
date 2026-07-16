@@ -115,6 +115,8 @@ use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::client_common::ResponseStream;
 use crate::feedback_tags;
+use crate::request_observer::ModelRequestObserver;
+use crate::request_observer::PreparedModelRequest;
 use crate::responses_metadata::CodexResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
 use crate::util::emit_feedback_auth_recovery_tags;
@@ -214,6 +216,7 @@ struct ModelClientState {
     disable_websockets: AtomicBool,
     agent_identity_session_fallback: AgentIdentitySessionFallback,
     cached_websocket_session: StdMutex<WebsocketSession>,
+    request_observer: ModelRequestObserver,
 }
 
 /// Resolved API client setup for a single request attempt.
@@ -452,6 +455,7 @@ impl ModelClient {
                 disable_websockets: AtomicBool::new(false),
                 agent_identity_session_fallback: AgentIdentitySessionFallback::default(),
                 cached_websocket_session: StdMutex::new(WebsocketSession::default()),
+                request_observer: ModelRequestObserver::default(),
             }),
             agent_identity_policy,
             prompt_cache_key_override: None,
@@ -487,6 +491,13 @@ impl ModelClient {
 
     pub(crate) fn auth_manager(&self) -> Option<Arc<AuthManager>> {
         self.state.provider.auth_manager()
+    }
+
+    pub(crate) fn inspect_model_requests(
+        &self,
+        limits: codex_context_inspector::ContextInspectionLimits,
+    ) -> codex_context_inspector::ModelRequestInspection {
+        self.state.request_observer.inspect(limits)
     }
 
     fn take_cached_websocket_session(&self) -> WebsocketSession {
@@ -1447,6 +1458,20 @@ impl ModelClientSession {
             let store = request.store;
             self.client
                 .prepare_response_items_for_request(&mut request.input, store);
+            let observed_attempt =
+                self.client
+                    .state
+                    .request_observer
+                    .record_prepared(PreparedModelRequest {
+                        request: &request,
+                        normalized_input: &prompt.input,
+                        output_schema: prompt.output_schema.as_ref(),
+                        provider: &self.client.state.provider.info().name,
+                        transport: codex_context_inspector::ModelRequestTransport::ResponsesHttp,
+                        transport_uses_delta: false,
+                        connection_reused: false,
+                        transport_input_items: request.input.len(),
+                    });
             let request_session_telemetry =
                 session_telemetry_for_request(session_telemetry, &request);
             let inference_trace_attempt = inference_trace.start_attempt();
@@ -1462,6 +1487,10 @@ impl ModelClientSession {
 
             match stream_result {
                 Ok(stream) => {
+                    self.client
+                        .state
+                        .request_observer
+                        .record_stream_opened(observed_attempt);
                     let (stream, _) = map_response_stream(
                         stream,
                         request_session_telemetry,
@@ -1473,6 +1502,10 @@ impl ModelClientSession {
                 Err(ApiError::Transport(
                     unauthorized_transport @ TransportError::Http { status, .. },
                 )) if status == StatusCode::UNAUTHORIZED => {
+                    self.client
+                        .state
+                        .request_observer
+                        .record_failed(observed_attempt);
                     let response_debug_context =
                         extract_response_debug_context(&unauthorized_transport);
                     inference_trace_attempt.record_failed(
@@ -1492,6 +1525,10 @@ impl ModelClientSession {
                     continue;
                 }
                 Err(err) => {
+                    self.client
+                        .state
+                        .request_observer
+                        .record_failed(observed_attempt);
                     let response_debug_context =
                         extract_response_debug_context_from_api_error(&err);
                     let err = self.client.state.provider.map_api_error(err);
@@ -1630,6 +1667,28 @@ impl ModelClientSession {
             let store = ws_payload.store;
             self.client
                 .prepare_response_items_for_request(&mut ws_payload.input, store);
+            let observed_attempt = if warmup {
+                None
+            } else {
+                let mut logical_request = request.clone();
+                let store = logical_request.store;
+                self.client
+                    .prepare_response_items_for_request(&mut logical_request.input, store);
+                self.client
+                    .state
+                    .request_observer
+                    .record_prepared(PreparedModelRequest {
+                        request: &logical_request,
+                        normalized_input: &prompt.input,
+                        output_schema: prompt.output_schema.as_ref(),
+                        provider: &self.client.state.provider.info().name,
+                        transport:
+                            codex_context_inspector::ModelRequestTransport::ResponsesWebsocket,
+                        transport_uses_delta: ws_payload.previous_response_id.is_some(),
+                        connection_reused: self.websocket_session.connection_reused(),
+                        transport_input_items: ws_payload.input.len(),
+                    })
+            };
             if previous_response_id_from_untraced_warmup {
                 // The transport can reuse an untraced warmup response id and omit the
                 // already-sent input, but rollout replay needs the logical model-visible
@@ -1640,20 +1699,29 @@ impl ModelClientSession {
             }
             self.websocket_session.last_request = Some(request);
             self.websocket_session.last_response_from_untraced_warmup = warmup;
-            let websocket_connection =
-                self.websocket_session.connection.as_ref().ok_or_else(|| {
-                    self.client.state.provider.map_api_error(ApiError::Stream(
-                        "websocket connection is unavailable".to_string(),
-                    ))
-                })?;
+            let Some(websocket_connection) = self.websocket_session.connection.as_ref() else {
+                self.client
+                    .state
+                    .request_observer
+                    .record_failed(observed_attempt);
+                return Err(self.client.state.provider.map_api_error(ApiError::Stream(
+                    "websocket connection is unavailable".to_string(),
+                )));
+            };
             let stream_result = websocket_connection
                 .stream_request(
                     ws_request,
                     self.websocket_session.connection_reused(),
                     Some(Arc::clone(&self.turn_state)),
                 )
-                .await
-                .map_err(|err| {
+                .await;
+            let stream_result = match stream_result {
+                Ok(stream_result) => stream_result,
+                Err(err) => {
+                    self.client
+                        .state
+                        .request_observer
+                        .record_failed(observed_attempt);
                     let response_debug_context =
                         extract_response_debug_context_from_api_error(&err);
                     let err = self.client.state.provider.map_api_error(err);
@@ -1662,8 +1730,13 @@ impl ModelClientSession {
                         response_debug_context.request_id.as_deref(),
                         /*output_items*/ &[],
                     );
-                    err
-                })?;
+                    return Err(err);
+                }
+            };
+            self.client
+                .state
+                .request_observer
+                .record_stream_opened(observed_attempt);
             let (stream, last_request_rx) = map_response_stream(
                 stream_result,
                 request_session_telemetry,
