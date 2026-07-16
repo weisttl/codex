@@ -176,6 +176,11 @@ struct ResponsesWebsocketTimingLogContext {
     connection_reused: bool,
 }
 
+struct PendingWebsocketRequest {
+    text: String,
+    tx_sent: oneshot::Sender<Result<(), String>>,
+}
+
 pub struct ResponsesWebsocketConnection {
     stream: Arc<Mutex<Option<WsStream>>>,
     // TODO (pakrym): is this the right place for timeout?
@@ -268,6 +273,7 @@ impl ResponsesWebsocketConnection {
             connection_reused,
         };
         let request_text = serialize_websocket_request(&request)?;
+        let (tx_request_sent, rx_request_sent) = oneshot::channel();
 
         let current_span = Span::current();
         tokio::spawn(
@@ -290,18 +296,20 @@ impl ResponsesWebsocketConnection {
                 let mut guard = stream.lock().await;
                 let result = {
                     let Some(ws_stream) = guard.as_mut() else {
-                        let _ = tx_event
-                            .send(Err(ApiError::Stream(
-                                "websocket connection is closed".to_string(),
-                            )))
-                            .await;
+                        let _ = tx_request_sent.send(Err(
+                            "websocket connection is closed before the request was sent"
+                                .to_string(),
+                        ));
                         return;
                     };
 
                     run_websocket_response_stream(
                         ws_stream,
                         tx_event.clone(),
-                        request_text,
+                        PendingWebsocketRequest {
+                            text: request_text,
+                            tx_sent: tx_request_sent,
+                        },
                         idle_timeout,
                         telemetry,
                         turn_state.as_deref(),
@@ -321,6 +329,16 @@ impl ResponsesWebsocketConnection {
             }
             .instrument(current_span),
         );
+
+        match rx_request_sent.await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => return Err(ApiError::Stream(err)),
+            Err(_) => {
+                return Err(ApiError::Stream(
+                    "websocket request task ended before the request was sent".to_string(),
+                ));
+            }
+        }
 
         Ok(ResponseStream {
             rx_event,
@@ -666,7 +684,7 @@ fn json_header_value(value: &Value) -> Option<HeaderValue> {
 async fn run_websocket_response_stream(
     ws_stream: &mut WsStream,
     tx_event: mpsc::Sender<std::result::Result<ResponseEvent, ApiError>>,
-    request_text: String,
+    pending_request: PendingWebsocketRequest,
     idle_timeout: Duration,
     telemetry: Option<Arc<dyn WebsocketTelemetry>>,
     turn_state: Option<&OnceLock<String>>,
@@ -674,14 +692,24 @@ async fn run_websocket_response_stream(
 ) -> Result<(), ApiError> {
     let mut last_server_model: Option<String> = None;
     let mut safety_buffering_treatment = SafetyBufferingTreatment::default();
-    send_websocket_request(
+    let PendingWebsocketRequest { text, tx_sent } = pending_request;
+    let send_result = send_websocket_request(
         ws_stream,
-        request_text,
+        text,
         idle_timeout,
         telemetry.as_ref(),
         timing_log_context.connection_reused,
     )
-    .await?;
+    .await;
+    match send_result {
+        Ok(()) => {
+            let _ = tx_sent.send(Ok(()));
+        }
+        Err(err) => {
+            let _ = tx_sent.send(Err(err.to_string()));
+            return Err(err);
+        }
+    }
 
     loop {
         let poll_start = Instant::now();
@@ -899,9 +927,8 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
 
-    #[test]
-    fn direct_serialization_preserves_websocket_request_payload() {
-        let request = ResponsesWsRequest::ResponseCreate(ResponseCreateWsRequest {
+    fn test_websocket_request() -> ResponsesWsRequest {
+        ResponsesWsRequest::ResponseCreate(ResponseCreateWsRequest {
             model: "gpt-test".to_string(),
             instructions: "Use the available tools.".to_string(),
             previous_response_id: Some("resp-1".to_string()),
@@ -934,7 +961,12 @@ mod tests {
                 "traceparent".to_string(),
                 "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01".to_string(),
             )])),
-        });
+        })
+    }
+
+    #[test]
+    fn direct_serialization_preserves_websocket_request_payload() {
+        let request = test_websocket_request();
 
         let previous_payload = serde_json::to_value(&request).expect("serialize previous payload");
         let request_text =
@@ -943,6 +975,37 @@ mod tests {
             serde_json::from_str::<Value>(&request_text).expect("parse websocket request");
 
         assert_eq!(wire_payload, previous_payload);
+    }
+
+    #[tokio::test]
+    async fn stream_request_returns_error_when_request_cannot_be_sent() {
+        let (tx_command, rx_command) = mpsc::channel::<WsCommand>(1);
+        drop(rx_command);
+        let (_tx_message, rx_message) = mpsc::unbounded_channel();
+        let connection = ResponsesWebsocketConnection {
+            stream: Arc::new(Mutex::new(Some(WsStream {
+                tx_command,
+                rx_message,
+                pump_task: tokio::spawn(async {}),
+            }))),
+            idle_timeout: Duration::from_secs(1),
+            server_reasoning_included: false,
+            models_etag: None,
+            server_model: None,
+            telemetry: None,
+        };
+
+        let Err(ApiError::Stream(message)) = connection
+            .stream_request(
+                test_websocket_request(),
+                /*connection_reused*/ false,
+                /*turn_state*/ None,
+            )
+            .await
+        else {
+            panic!("expected websocket send failure");
+        };
+        assert!(message.contains("failed to send websocket request"));
     }
 
     #[test]
