@@ -1,0 +1,57 @@
+---
+source: tui/src/context_inspector_tests.rs
+expression: plain(render_snapshot(&snapshot))
+---
+Live context snapshot
+Read-only, metadata-only. Content, arguments, outputs, schemas, and IDs are not disclosed.
+History version: 7
+Item metadata limit: 128
+
+Current history
+Raw history
+  2 items · 2 represented · 0 omitted · 200 serialized bytes
+  Fingerprint: sha256:raw
+  [  0] message · user · 120 B
+  [  1] reasoning · 80 B
+Normalized history
+  1 items · 1 represented · 0 omitted · 120 serialized bytes
+  Fingerprint: sha256:normalized
+  [  0] message · user · 120 B
+Normalization changed: yes
+Normalization identity counts: 1 unchanged, 1 raw-only, 0 normalized-only
+
+Observed model requests
+Sent is transport-level: HTTP returned a response stream; WebSocket wrote the request frame.
+
+Latest attempt #5 · failed
+  Captured at (Unix seconds): 1700000000
+  Model / provider: gpt-test / OpenAI
+  Transport: responses WebSocket · delta=yes · connection reused=yes · 1 transport input items
+  Logical request: 2048 B · sha256:request-5
+  Instructions: 512 B · sha256:instructions
+  Tools: 3 items · 768 B · sha256:tools
+  Output schema: none
+  Normalized request input
+    1 items · 1 represented · 0 omitted · 120 serialized bytes
+    Fingerprint: sha256:normalized
+    [  0] message · user · 120 B
+  Provider request input
+    2 items · 2 represented · 0 omitted · 184 serialized bytes
+    Fingerprint: sha256:provider
+    [  0] message · developer · 64 B
+    [  1] message · user · 120 B
+
+Last actual #4 · sent
+  Captured at (Unix seconds): 1700000000
+  Model / provider: gpt-test / OpenAI
+  Transport: responses HTTP · delta=no · connection reused=no · 1 transport input items
+  Logical request: 2048 B · sha256:request-4
+  Instructions: 512 B · sha256:instructions
+  Tools: 3 items · 768 B · sha256:tools
+  Output schema: none
+  Normalized request input
+    1 items · 1 represented · 0 omitted · 120 serialized bytes
+    Fingerprint: sha256:normalized
+    [  0] message · user · 120 B
+  Provider request input: same as normalized request input
+Current normalized matches last actual: yes

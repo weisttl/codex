@@ -2158,6 +2158,57 @@ async fn slash_clear_is_disabled_while_task_running() {
 }
 
 #[tokio::test]
+async fn context_inspect_is_read_only_and_available_while_task_running() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let thread_id = ThreadId::new();
+    chat.thread_id = Some(thread_id);
+    chat.bottom_pane.set_task_running(/*running*/ true);
+
+    chat.bottom_pane
+        .set_composer_text("/context inspect".to_string(), Vec::new(), Vec::new());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(chat.bottom_pane.composer_text(), "");
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::InspectContext {
+            thread_id: actual_thread_id,
+        }) if actual_thread_id == thread_id
+    );
+    assert!(rx.try_recv().is_err(), "expected no transcript event");
+    assert_no_submit_op(&mut op_rx);
+}
+
+#[tokio::test]
+async fn context_command_requires_inspect_subcommand() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+
+    chat.dispatch_command(SlashCommand::Context);
+
+    let AppEvent::InsertHistoryCell(cell) = rx.try_recv().expect("expected usage error") else {
+        panic!("expected usage error history cell");
+    };
+    assert!(
+        lines_to_single_string(&cell.display_lines(/*width*/ 80))
+            .contains("Usage: /context inspect")
+    );
+
+    submit_composer_text(&mut chat, "/context modify");
+
+    assert_eq!(chat.bottom_pane.composer_text(), "");
+    let AppEvent::InsertHistoryCell(cell) = rx.try_recv().expect("expected usage error") else {
+        panic!("expected usage error history cell");
+    };
+    assert!(
+        lines_to_single_string(&cell.display_lines(/*width*/ 80))
+            .contains("Usage: /context inspect")
+    );
+    assert_no_submit_op(&mut op_rx);
+}
+
+#[tokio::test]
 async fn slash_archive_is_disabled_while_task_running() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.bottom_pane.set_task_running(/*running*/ true);

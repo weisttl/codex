@@ -58,6 +58,8 @@ use codex_app_server_protocol::ThreadBackgroundTerminalsCleanParams;
 use codex_app_server_protocol::ThreadBackgroundTerminalsCleanResponse;
 use codex_app_server_protocol::ThreadCompactStartParams;
 use codex_app_server_protocol::ThreadCompactStartResponse;
+use codex_app_server_protocol::ThreadContextInspectParams;
+use codex_app_server_protocol::ThreadContextInspectResponse;
 use codex_app_server_protocol::ThreadDeleteParams;
 use codex_app_server_protocol::ThreadDeleteResponse;
 use codex_app_server_protocol::ThreadForkParams;
@@ -687,6 +689,23 @@ impl AppServerSession {
             .await
             .wrap_err("thread/read failed during TUI session lookup")?;
         Ok(response.thread)
+    }
+
+    pub(crate) async fn thread_context_inspect(
+        &mut self,
+        thread_id: ThreadId,
+    ) -> Result<ThreadContextInspectResponse> {
+        let request_id = self.next_request_id();
+        self.client
+            .request_typed(ClientRequest::ThreadContextInspect {
+                request_id,
+                params: ThreadContextInspectParams {
+                    thread_id: thread_id.to_string(),
+                    max_items: None,
+                },
+            })
+            .await
+            .wrap_err("thread/contextInspect failed in TUI")
     }
 
     pub(crate) async fn thread_archive(&mut self, thread_id: ThreadId) -> Result<()> {

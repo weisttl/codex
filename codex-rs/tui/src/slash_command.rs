@@ -47,6 +47,7 @@ pub enum SlashCommand {
     Raw,
     Diff,
     Mention,
+    Context,
     Status,
     Usage,
     DebugConfig,
@@ -99,6 +100,7 @@ impl SlashCommand {
             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
+            SlashCommand::Context => "inspect live model context: /context inspect",
             SlashCommand::Skills => "use skills to improve how Codex performs specific tasks",
             SlashCommand::Import => "import setup, this project, and recent chats from Claude Code",
             SlashCommand::Hooks => "view and manage lifecycle hooks",
@@ -160,6 +162,7 @@ impl SlashCommand {
                 | SlashCommand::Ide
                 | SlashCommand::Keymap
                 | SlashCommand::Mcp
+                | SlashCommand::Context
                 | SlashCommand::Raw
                 | SlashCommand::Usage
                 | SlashCommand::Pets
@@ -178,6 +181,7 @@ impl SlashCommand {
                 | SlashCommand::Raw
                 | SlashCommand::Diff
                 | SlashCommand::Mention
+                | SlashCommand::Context
                 | SlashCommand::Status
                 | SlashCommand::Usage
                 | SlashCommand::Ide
@@ -217,6 +221,7 @@ impl SlashCommand {
             | SlashCommand::Mention
             | SlashCommand::Skills
             | SlashCommand::Hooks
+            | SlashCommand::Context
             | SlashCommand::Status
             | SlashCommand::Usage
             | SlashCommand::DebugConfig
