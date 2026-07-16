@@ -387,6 +387,11 @@ pub(crate) enum AppEvent {
     /// Result of computing a `/diff` command.
     DiffResult(String),
 
+    /// Inspect the active thread's live model context without submitting a turn.
+    InspectContext {
+        thread_id: ThreadId,
+    },
+
     /// Open the app link view in the bottom pane.
     OpenAppLink {
         app_id: String,

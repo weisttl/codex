@@ -418,6 +418,9 @@ impl ChatWidget {
             SlashCommand::Mention => {
                 self.insert_str("@");
             }
+            SlashCommand::Context => {
+                self.add_error_message("Usage: /context inspect".to_string());
+            }
             SlashCommand::Skills => {
                 self.open_skills_menu();
             }
@@ -684,6 +687,19 @@ impl ChatWidget {
                 "verbose" => self.add_mcp_output(McpServerStatusDetail::Full),
                 _ => self.add_error_message("Usage: /mcp [verbose]".to_string()),
             },
+            SlashCommand::Context => {
+                if !trimmed.eq_ignore_ascii_case("inspect") {
+                    self.add_error_message("Usage: /context inspect".to_string());
+                } else if let Some(thread_id) = self.thread_id {
+                    self.app_event_tx
+                        .send(AppEvent::InspectContext { thread_id });
+                } else {
+                    self.add_error_message(
+                        "Session is still starting; try /context inspect again in a moment."
+                            .to_string(),
+                    );
+                }
+            }
             SlashCommand::Keymap => match trimmed.to_ascii_lowercase().as_str() {
                 "" => self.open_keymap_picker(),
                 "debug" => {
@@ -1041,6 +1057,7 @@ impl ChatWidget {
         }
         match cmd {
             SlashCommand::Ide
+            | SlashCommand::Context
             | SlashCommand::Status
             | SlashCommand::Usage
             | SlashCommand::DebugConfig

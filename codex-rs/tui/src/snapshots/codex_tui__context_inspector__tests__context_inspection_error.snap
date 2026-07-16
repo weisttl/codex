@@ -1,0 +1,7 @@
+---
+source: tui/src/context_inspector_tests.rs
+expression: "plain(render_error(\"thread not found\"))"
+---
+Context inspection failed
+thread not found
+No model request was issued and no conversation history was changed.

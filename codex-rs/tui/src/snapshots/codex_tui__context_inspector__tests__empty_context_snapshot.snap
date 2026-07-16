@@ -1,0 +1,23 @@
+---
+source: tui/src/context_inspector_tests.rs
+expression: plain(render_snapshot(&snapshot))
+---
+Live context snapshot
+Read-only, metadata-only. Content, arguments, outputs, schemas, and IDs are not disclosed.
+History version: 0
+Item metadata limit: 128
+
+Current history
+Raw history
+  0 items · 0 represented · 0 omitted · 0 serialized bytes
+  Fingerprint: sha256:empty
+  (no item metadata represented)
+Normalized history: same as raw history
+Normalization changed: no
+Normalization identity counts: 0 unchanged, 0 raw-only, 0 normalized-only
+
+Observed model requests
+Sent is transport-level: HTTP returned a response stream; WebSocket wrote the request frame.
+Latest attempt: none observed
+Last actual: none sent
+Current normalized matches last actual: not available

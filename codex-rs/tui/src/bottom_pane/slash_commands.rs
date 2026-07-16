@@ -307,6 +307,7 @@ mod tests {
                 SlashCommand::Raw,
                 SlashCommand::Diff,
                 SlashCommand::Mention,
+                SlashCommand::Context,
                 SlashCommand::Status,
                 SlashCommand::Usage,
             ]

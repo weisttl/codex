@@ -490,6 +490,19 @@ impl App {
                 ));
                 tui.frame_requester().schedule_frame();
             }
+            AppEvent::InspectContext { thread_id } => {
+                let lines = match app_server.thread_context_inspect(thread_id).await {
+                    Ok(response) => crate::context_inspector::render_snapshot(&response.snapshot),
+                    Err(err) => crate::context_inspector::render_error(&err.to_string()),
+                };
+                let _ = tui.enter_alt_screen();
+                self.overlay = Some(Overlay::new_static_with_lines(
+                    lines,
+                    "C O N T E X T".to_string(),
+                    self.keymap.pager.clone(),
+                ));
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::OpenAppLink {
                 app_id,
                 title,
