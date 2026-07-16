@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use codex_protocol::models::ResponseItem;
 use serde::Serialize;
 use serde_json::Value;
@@ -13,8 +15,8 @@ use super::project_collection;
 use super::to_u64;
 use crate::ContextItemCollection;
 
-const REQUEST_FINGERPRINT_VERSION: &[u8] = b"codex-model-request-v1\0";
-const COMPONENT_FINGERPRINT_VERSION: &[u8] = b"codex-model-request-component-v1\0";
+const REQUEST_FINGERPRINT_VERSION: &[u8] = b"codex-model-request-v2\0";
+const COMPONENT_FINGERPRINT_VERSION: &[u8] = b"codex-model-request-component-v2\0";
 
 /// Provider transport used for a model request attempt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -29,7 +31,7 @@ pub enum ModelRequestTransport {
 #[serde(rename_all = "camelCase")]
 pub enum ModelRequestAttemptStatus {
     Prepared,
-    StreamOpened,
+    Sent,
     Failed,
 }
 
@@ -51,7 +53,7 @@ pub struct ModelRequestValueCollectionSummary {
 }
 
 /// Inputs needed to project one complete logical provider request without retaining its contents.
-pub struct ModelRequestProjection<'a> {
+pub struct ModelRequestProjection<'a, T: Serialize + ?Sized> {
     pub sequence: u64,
     pub captured_at: i64,
     pub transport: ModelRequestTransport,
@@ -60,7 +62,7 @@ pub struct ModelRequestProjection<'a> {
     pub transport_input_items: usize,
     pub model: &'a str,
     pub provider: &'a str,
-    pub serialized_request: &'a [u8],
+    pub request: &'a T,
     pub normalized_input: &'a [ResponseItem],
     pub provider_input: &'a [ResponseItem],
     pub instructions: Option<&'a str>,
@@ -98,8 +100,17 @@ pub struct ModelRequestSnapshot {
 }
 
 impl ModelRequestSnapshot {
-    pub fn project(projection: ModelRequestProjection<'_>) -> Result<Self, ContextInspectionError> {
+    pub fn project<T: Serialize + ?Sized>(
+        projection: ModelRequestProjection<'_, T>,
+    ) -> Result<Self, ContextInspectionError> {
         let storage_limits = ContextInspectionLimits::with_max_items(HARD_MAX_ITEMS);
+        let normalized_input = project_collection(projection.normalized_input, storage_limits)?;
+        let provider_input = if projection.normalized_input == projection.provider_input {
+            normalized_input.collection.clone()
+        } else {
+            project_collection(projection.provider_input, storage_limits)?.collection
+        };
+        let request = serialized_summary(REQUEST_FINGERPRINT_VERSION, projection.request)?;
         Ok(Self {
             sequence: projection.sequence,
             captured_at: projection.captured_at,
@@ -110,15 +121,10 @@ impl ModelRequestSnapshot {
             transport_input_items: to_u64(projection.transport_input_items),
             model: bounded_metadata_text(projection.model),
             provider: bounded_metadata_text(projection.provider),
-            fingerprint: fingerprint_bytes(
-                REQUEST_FINGERPRINT_VERSION,
-                projection.serialized_request,
-            ),
-            serialized_bytes: to_u64(projection.serialized_request.len()),
-            normalized_input: project_collection(projection.normalized_input, storage_limits)?
-                .collection,
-            provider_input: project_collection(projection.provider_input, storage_limits)?
-                .collection,
+            fingerprint: request.fingerprint,
+            serialized_bytes: request.serialized_bytes,
+            normalized_input: normalized_input.collection,
+            provider_input,
             instructions: projection.instructions.map(component_summary).transpose()?,
             tools: projection.tools.map(value_collection_summary).transpose()?,
             output_schema: projection
@@ -134,13 +140,13 @@ impl ModelRequestSnapshot {
     }
 }
 
-/// Session-scoped observations for the latest attempt and latest opened response stream.
+/// Session-scoped observations for the latest attempt and latest sent request.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRequestInspection {
     pub latest_attempt: Option<ModelRequestSnapshot>,
     pub last_actual: Option<ModelRequestSnapshot>,
-    /// `None` until a request has successfully opened a provider response stream.
+    /// `None` until a request has been sent successfully at the transport boundary.
     pub current_normalized_matches_last_actual: Option<bool>,
 }
 
@@ -159,11 +165,7 @@ impl ModelRequestInspection {
 fn component_summary<T: Serialize + ?Sized>(
     value: &T,
 ) -> Result<ModelRequestComponentSummary, serde_json::Error> {
-    let serialized = serde_json::to_vec(value)?;
-    Ok(ModelRequestComponentSummary {
-        fingerprint: fingerprint_bytes(COMPONENT_FINGERPRINT_VERSION, &serialized),
-        serialized_bytes: to_u64(serialized.len()),
-    })
+    serialized_summary(COMPONENT_FINGERPRINT_VERSION, value)
 }
 
 fn value_collection_summary(
@@ -177,12 +179,49 @@ fn value_collection_summary(
     })
 }
 
-fn fingerprint_bytes(version: &[u8], bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(version);
-    hasher.update(to_u64(bytes.len()).to_be_bytes());
-    hasher.update(bytes);
-    format_fingerprint(hasher.finalize().into())
+fn serialized_summary<T: Serialize + ?Sized>(
+    version: &[u8],
+    value: &T,
+) -> Result<ModelRequestComponentSummary, serde_json::Error> {
+    let mut writer = FingerprintWriter::new(version);
+    serde_json::to_writer(&mut writer, value)?;
+    Ok(writer.finish())
+}
+
+struct FingerprintWriter {
+    hasher: Sha256,
+    serialized_bytes: u64,
+}
+
+impl FingerprintWriter {
+    fn new(version: &[u8]) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(version);
+        Self {
+            hasher,
+            serialized_bytes: 0,
+        }
+    }
+
+    fn finish(mut self) -> ModelRequestComponentSummary {
+        self.hasher.update(self.serialized_bytes.to_be_bytes());
+        ModelRequestComponentSummary {
+            fingerprint: format_fingerprint(self.hasher.finalize().into()),
+            serialized_bytes: self.serialized_bytes,
+        }
+    }
+}
+
+impl Write for FingerprintWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.hasher.update(buf);
+        self.serialized_bytes = self.serialized_bytes.saturating_add(to_u64(buf.len()));
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

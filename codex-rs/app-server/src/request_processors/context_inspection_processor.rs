@@ -93,9 +93,7 @@ fn api_model_request_snapshot(snapshot: codex_core::ModelRequestSnapshot) -> Mod
         captured_at: snapshot.captured_at,
         status: match snapshot.status {
             codex_core::ModelRequestAttemptStatus::Prepared => ModelRequestAttemptStatus::Prepared,
-            codex_core::ModelRequestAttemptStatus::StreamOpened => {
-                ModelRequestAttemptStatus::StreamOpened
-            }
+            codex_core::ModelRequestAttemptStatus::Sent => ModelRequestAttemptStatus::Sent,
             codex_core::ModelRequestAttemptStatus::Failed => ModelRequestAttemptStatus::Failed,
         },
         transport: match snapshot.transport {

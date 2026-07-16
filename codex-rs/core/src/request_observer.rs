@@ -44,13 +44,6 @@ impl ModelRequestObserver {
         &self,
         prepared: PreparedModelRequest<'_>,
     ) -> Option<ModelRequestAttempt> {
-        let serialized_request = match serde_json::to_vec(prepared.request) {
-            Ok(serialized_request) => serialized_request,
-            Err(err) => {
-                debug!(%err, "failed to serialize model request for context inspection");
-                return None;
-            }
-        };
         let sequence = {
             let mut state = self
                 .state
@@ -69,7 +62,7 @@ impl ModelRequestObserver {
             transport_input_items: prepared.transport_input_items,
             model: &request.model,
             provider: prepared.provider,
-            serialized_request: &serialized_request,
+            request,
             normalized_input: prepared.normalized_input,
             provider_input: &request.input,
             instructions: (!request.instructions.is_empty()).then_some(&request.instructions),
@@ -97,8 +90,8 @@ impl ModelRequestObserver {
         Some(ModelRequestAttempt(snapshot))
     }
 
-    pub(crate) fn record_stream_opened(&self, attempt: Option<ModelRequestAttempt>) {
-        self.record_status(attempt, ModelRequestAttemptStatus::StreamOpened);
+    pub(crate) fn record_sent(&self, attempt: Option<ModelRequestAttempt>) {
+        self.record_status(attempt, ModelRequestAttemptStatus::Sent);
     }
 
     pub(crate) fn record_failed(&self, attempt: Option<ModelRequestAttempt>) {
@@ -138,7 +131,7 @@ impl ModelRequestObserver {
         {
             state.latest_attempt = Some(snapshot.clone());
         }
-        if status == ModelRequestAttemptStatus::StreamOpened
+        if status == ModelRequestAttemptStatus::Sent
             && state
                 .last_actual
                 .as_ref()

@@ -34,7 +34,7 @@ pub struct ContextInspectionSnapshot {
     /// Current history after production prompt normalization.
     pub normalized: ContextInspectionCollection,
     pub normalization: ContextNormalizationSummary,
-    /// Latest request attempt and latest request that opened a provider response stream.
+    /// Latest request attempt and latest request sent at the transport boundary.
     pub request: ModelRequestInspection,
 }
 
@@ -152,7 +152,7 @@ pub struct ModelRequestValueCollectionSummary {
 #[ts(rename_all = "camelCase", export_to = "v2/")]
 pub enum ModelRequestAttemptStatus {
     Prepared,
-    StreamOpened,
+    Sent,
     Failed,
 }
 

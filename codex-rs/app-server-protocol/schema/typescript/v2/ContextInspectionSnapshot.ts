@@ -21,6 +21,6 @@ raw: ContextInspectionCollection,
  */
 normalized: ContextInspectionCollection, normalization: ContextNormalizationSummary,
 /**
- * Latest request attempt and latest request that opened a provider response stream.
+ * Latest request attempt and latest request sent at the transport boundary.
  */
 request: ModelRequestInspection, };

@@ -167,7 +167,7 @@ async fn thread_context_inspect_is_bounded_metadata_only_and_read_only() -> Resu
             latest_attempt.connection_reused,
         ),
         (
-            ModelRequestAttemptStatus::StreamOpened,
+            ModelRequestAttemptStatus::Sent,
             ModelRequestTransport::ResponsesHttp,
             false,
             false,

@@ -78,10 +78,7 @@ async fn inspection_is_repeatable_and_matches_the_next_request_prefix() -> anyho
         .as_ref()
         .expect("last actual request");
     assert_eq!(latest_attempt, last_actual);
-    assert_eq!(
-        latest_attempt.status,
-        ModelRequestAttemptStatus::StreamOpened
-    );
+    assert_eq!(latest_attempt.status, ModelRequestAttemptStatus::Sent);
     assert_eq!(
         latest_attempt.transport,
         ModelRequestTransport::ResponsesHttp
@@ -270,7 +267,7 @@ async fn websocket_inspection_keeps_full_logical_input_separate_from_transport_d
         .expect("last actual websocket request");
     assert_eq!(latest_attempt, last_actual);
     assert_eq!(last_actual.sequence, 2);
-    assert_eq!(last_actual.status, ModelRequestAttemptStatus::StreamOpened);
+    assert_eq!(last_actual.status, ModelRequestAttemptStatus::Sent);
     assert_eq!(
         last_actual.transport,
         ModelRequestTransport::ResponsesWebsocket

@@ -24,7 +24,7 @@ fn request_projection_is_metadata_only_and_component_aware() -> Result<(), Conte
     let provider_input = vec![message(&format!("provider-{SECRET}"))];
     let tools = vec![json!({"type": "function", "description": SECRET})];
     let output_schema = json!({"description": SECRET});
-    let serialized_request = serde_json::to_vec(&json!({"input": SECRET}))?;
+    let request = json!({"input": SECRET});
     let snapshot = ModelRequestSnapshot::project(ModelRequestProjection {
         sequence: 3,
         captured_at: 11,
@@ -34,7 +34,7 @@ fn request_projection_is_metadata_only_and_component_aware() -> Result<(), Conte
         transport_input_items: provider_input.len(),
         model: "test-model",
         provider: "test-provider",
-        serialized_request: &serialized_request,
+        request: &request,
         normalized_input: &normalized_input,
         provider_input: &provider_input,
         instructions: Some(SECRET),
@@ -61,7 +61,6 @@ fn request_projection_is_hard_capped_then_can_be_limited_at_inspection_time()
     let items = (0..(HARD_MAX_ITEMS + 1))
         .map(|index| message(&format!("item-{index}")))
         .collect::<Vec<_>>();
-    let serialized_request = serde_json::to_vec(&items)?;
     let snapshot = ModelRequestSnapshot::project(ModelRequestProjection {
         sequence: 1,
         captured_at: 1,
@@ -71,7 +70,7 @@ fn request_projection_is_hard_capped_then_can_be_limited_at_inspection_time()
         transport_input_items: 1,
         model: "model",
         provider: "provider",
-        serialized_request: &serialized_request,
+        request: &items,
         normalized_input: &items,
         provider_input: &items,
         instructions: None,
@@ -110,10 +109,7 @@ fn request_projection_is_hard_capped_then_can_be_limited_at_inspection_time()
 fn request_identity_changes_with_content_and_order() -> Result<(), ContextInspectionError> {
     let first = vec![message("first"), message("second")];
     let reversed = vec![message("second"), message("first")];
-    let first_bytes = serde_json::to_vec(&first)?;
-    let reversed_bytes = serde_json::to_vec(&reversed)?;
-
-    let project = |items: &[ResponseItem], bytes: &[u8]| {
+    let project = |items: &[ResponseItem]| {
         ModelRequestSnapshot::project(ModelRequestProjection {
             sequence: 1,
             captured_at: 1,
@@ -123,7 +119,7 @@ fn request_identity_changes_with_content_and_order() -> Result<(), ContextInspec
             transport_input_items: items.len(),
             model: "model",
             provider: "provider",
-            serialized_request: bytes,
+            request: items,
             normalized_input: items,
             provider_input: items,
             instructions: None,
@@ -131,8 +127,8 @@ fn request_identity_changes_with_content_and_order() -> Result<(), ContextInspec
             output_schema: None,
         })
     };
-    let first_snapshot = project(&first, &first_bytes)?;
-    let reversed_snapshot = project(&reversed, &reversed_bytes)?;
+    let first_snapshot = project(&first)?;
+    let reversed_snapshot = project(&reversed)?;
 
     assert_ne!(first_snapshot.fingerprint, reversed_snapshot.fingerprint);
     assert_ne!(
@@ -145,7 +141,7 @@ fn request_identity_changes_with_content_and_order() -> Result<(), ContextInspec
 #[test]
 fn model_and_provider_are_utf8_bounded() -> Result<(), ContextInspectionError> {
     let long_value = "界".repeat(super::super::MAX_METADATA_TEXT_BYTES);
-    let serialized_request = serde_json::to_vec(&json!({}))?;
+    let request = json!({});
     let snapshot = ModelRequestSnapshot::project(ModelRequestProjection {
         sequence: 1,
         captured_at: 1,
@@ -155,7 +151,7 @@ fn model_and_provider_are_utf8_bounded() -> Result<(), ContextInspectionError> {
         transport_input_items: 0,
         model: &long_value,
         provider: &long_value,
-        serialized_request: &serialized_request,
+        request: &request,
         normalized_input: &[],
         provider_input: &[],
         instructions: None,

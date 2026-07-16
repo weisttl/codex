@@ -9123,7 +9123,7 @@
                 "$ref": "#/definitions/v2/ModelRequestInspection"
               }
             ],
-            "description": "Latest request attempt and latest request that opened a provider response stream."
+            "description": "Latest request attempt and latest request sent at the transport boundary."
           }
         },
         "required": [
@@ -13202,7 +13202,7 @@
       "ModelRequestAttemptStatus": {
         "enum": [
           "prepared",
-          "streamOpened",
+          "sent",
           "failed"
         ],
         "type": "string"
