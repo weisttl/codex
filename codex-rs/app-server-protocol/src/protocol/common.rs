@@ -640,6 +640,12 @@ client_request_definitions! {
         serialization: thread_id(params.thread_id),
         response: v2::ThreadReadResponse,
     },
+    #[experimental("thread/contextInspect")]
+    ThreadContextInspect => "thread/contextInspect" {
+        params: v2::ThreadContextInspectParams,
+        serialization: thread_id(params.thread_id),
+        response: v2::ThreadContextInspectResponse,
+    },
     #[experimental("thread/turns/list")]
     ThreadTurnsList => "thread/turns/list" {
         params: v2::ThreadTurnsListParams,

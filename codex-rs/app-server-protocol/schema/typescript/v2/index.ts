@@ -93,6 +93,12 @@ export type { ConsumeAccountRateLimitResetCreditOutcome } from "./ConsumeAccount
 export type { ConsumeAccountRateLimitResetCreditParams } from "./ConsumeAccountRateLimitResetCreditParams";
 export type { ConsumeAccountRateLimitResetCreditResponse } from "./ConsumeAccountRateLimitResetCreditResponse";
 export type { ContextCompactedNotification } from "./ContextCompactedNotification";
+export type { ContextContentDisclosure } from "./ContextContentDisclosure";
+export type { ContextInspectionCollection } from "./ContextInspectionCollection";
+export type { ContextInspectionItem } from "./ContextInspectionItem";
+export type { ContextInspectionLimits } from "./ContextInspectionLimits";
+export type { ContextInspectionSnapshot } from "./ContextInspectionSnapshot";
+export type { ContextNormalizationSummary } from "./ContextNormalizationSummary";
 export type { CreditsSnapshot } from "./CreditsSnapshot";
 export type { DeprecationNoticeNotification } from "./DeprecationNoticeNotification";
 export type { DynamicToolCallOutputContentItem } from "./DynamicToolCallOutputContentItem";
