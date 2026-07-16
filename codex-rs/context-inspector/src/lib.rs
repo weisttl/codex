@@ -12,6 +12,16 @@ use sha2::Digest;
 use sha2::Sha256;
 use thiserror::Error;
 
+mod request;
+
+pub use request::ModelRequestAttemptStatus;
+pub use request::ModelRequestComponentSummary;
+pub use request::ModelRequestInspection;
+pub use request::ModelRequestProjection;
+pub use request::ModelRequestSnapshot;
+pub use request::ModelRequestTransport;
+pub use request::ModelRequestValueCollectionSummary;
+
 /// Default number of item metadata records represented in each collection.
 pub const DEFAULT_MAX_ITEMS: usize = 128;
 /// Absolute maximum number of item metadata records represented in each collection.
@@ -87,6 +97,14 @@ pub struct ContextItemCollection {
     pub items: Vec<ContextInspectionItem>,
 }
 
+impl ContextItemCollection {
+    fn apply_limit(&mut self, limits: ContextInspectionLimits) {
+        self.items.truncate(limits.max_items());
+        self.represented_items = to_u64(self.items.len());
+        self.omitted_items = self.total_items.saturating_sub(self.represented_items);
+    }
+}
+
 /// Content-identity comparison between raw and normalized history.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,6 +135,8 @@ pub struct CurrentContextSnapshot {
     pub normalized: ContextItemCollection,
     /// Identity-level summary of normalization effects.
     pub normalization: ContextNormalizationSummary,
+    /// Latest prepared request attempt and latest request that opened a provider response stream.
+    pub request: ModelRequestInspection,
 }
 
 impl CurrentContextSnapshot {
@@ -139,7 +159,19 @@ impl CurrentContextSnapshot {
             raw: raw.collection,
             normalized: normalized.collection,
             normalization,
+            request: ModelRequestInspection::default(),
         })
+    }
+
+    /// Attaches the session's request observations and compares current normalized history with the
+    /// latest request that successfully opened a provider response stream.
+    pub fn with_request_inspection(mut self, mut request: ModelRequestInspection) -> Self {
+        request.current_normalized_matches_last_actual = request
+            .last_actual
+            .as_ref()
+            .map(|actual| actual.normalized_input.fingerprint == self.normalized.fingerprint);
+        self.request = request;
+        self
     }
 }
 
@@ -151,9 +183,9 @@ pub enum ContextInspectionError {
     Serialization(#[from] serde_json::Error),
 }
 
-struct CollectionProjection {
-    collection: ContextItemCollection,
-    item_fingerprints: Vec<[u8; 32]>,
+pub(crate) struct CollectionProjection {
+    pub(crate) collection: ContextItemCollection,
+    pub(crate) item_fingerprints: Vec<[u8; 32]>,
 }
 
 #[derive(Deserialize)]
@@ -163,7 +195,7 @@ struct SerializedItemMetadata {
     role: Option<String>,
 }
 
-fn project_collection(
+pub(crate) fn project_collection(
     items: &[ResponseItem],
     limits: ContextInspectionLimits,
 ) -> Result<CollectionProjection, ContextInspectionError> {
@@ -239,7 +271,7 @@ fn summarize_normalization(
     }
 }
 
-fn bounded_metadata_text(value: &str) -> String {
+pub(crate) fn bounded_metadata_text(value: &str) -> String {
     let mut end = value.len().min(MAX_METADATA_TEXT_BYTES);
     while !value.is_char_boundary(end) {
         end = end.saturating_sub(1);
@@ -247,7 +279,7 @@ fn bounded_metadata_text(value: &str) -> String {
     value[..end].to_string()
 }
 
-fn format_fingerprint(digest: [u8; 32]) -> String {
+pub(crate) fn format_fingerprint(digest: [u8; 32]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut fingerprint = String::with_capacity("sha256:".len() + digest.len() * 2);
     fingerprint.push_str("sha256:");
@@ -258,7 +290,7 @@ fn format_fingerprint(digest: [u8; 32]) -> String {
     fingerprint
 }
 
-fn to_u64(value: usize) -> u64 {
+pub(crate) fn to_u64(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
