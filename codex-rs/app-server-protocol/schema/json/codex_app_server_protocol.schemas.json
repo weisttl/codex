@@ -9116,6 +9116,14 @@
               }
             ],
             "description": "Current history before production prompt normalization."
+          },
+          "request": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestInspection"
+              }
+            ],
+            "description": "Latest request attempt and latest request sent at the transport boundary."
           }
         },
         "required": [
@@ -9124,7 +9132,8 @@
           "historyVersion",
           "normalization",
           "normalized",
-          "raw"
+          "raw",
+          "request"
         ],
         "type": "object"
       },
@@ -13188,6 +13197,203 @@
           "webSearch"
         ],
         "title": "ModelProviderCapabilitiesReadResponse",
+        "type": "object"
+      },
+      "ModelRequestAttemptStatus": {
+        "enum": [
+          "prepared",
+          "sent",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "ModelRequestComponentSummary": {
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "serializedBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "serializedBytes"
+        ],
+        "type": "object"
+      },
+      "ModelRequestInspection": {
+        "properties": {
+          "currentNormalizedMatchesLastActual": {
+            "description": "Whether current normalized history exactly matches `lastActual.normalizedInput`.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "lastActual": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latestAttempt": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ModelRequestSnapshot": {
+        "properties": {
+          "capturedAt": {
+            "description": "Unix timestamp in seconds when the request was prepared.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "connectionReused": {
+            "description": "Whether the WebSocket connection was reused. Always false for HTTP.",
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "description": "Identity and size of the complete logical request, not a WebSocket delta payload.",
+            "type": "string"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestComponentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "normalizedInput": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/v2/ContextInspectionCollection"
+              }
+            ],
+            "description": "Production prompt input before provider-specific adaptation."
+          },
+          "outputSchema": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestComponentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "providerInput": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/v2/ContextInspectionCollection"
+              }
+            ],
+            "description": "Complete logical provider input after provider-specific adaptation."
+          },
+          "sequence": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "serializedBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/definitions/v2/ModelRequestAttemptStatus"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ModelRequestValueCollectionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transport": {
+            "$ref": "#/definitions/v2/ModelRequestTransport"
+          },
+          "transportInputItems": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "transportUsesDelta": {
+            "description": "Whether the WebSocket transport sent a delta with `previousResponseId`.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capturedAt",
+          "connectionReused",
+          "fingerprint",
+          "model",
+          "normalizedInput",
+          "provider",
+          "providerInput",
+          "sequence",
+          "serializedBytes",
+          "status",
+          "transport",
+          "transportInputItems",
+          "transportUsesDelta"
+        ],
+        "type": "object"
+      },
+      "ModelRequestTransport": {
+        "enum": [
+          "responsesHttp",
+          "responsesWebsocket"
+        ],
+        "type": "string"
+      },
+      "ModelRequestValueCollectionSummary": {
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "serializedBytes": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "totalItems": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "serializedBytes",
+          "totalItems"
+        ],
         "type": "object"
       },
       "ModelRerouteReason": {

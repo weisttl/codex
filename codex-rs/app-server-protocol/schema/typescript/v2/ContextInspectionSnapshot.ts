@@ -5,6 +5,7 @@ import type { ContextContentDisclosure } from "./ContextContentDisclosure";
 import type { ContextInspectionCollection } from "./ContextInspectionCollection";
 import type { ContextInspectionLimits } from "./ContextInspectionLimits";
 import type { ContextNormalizationSummary } from "./ContextNormalizationSummary";
+import type { ModelRequestInspection } from "./ModelRequestInspection";
 
 export type ContextInspectionSnapshot = {
 /**
@@ -18,4 +19,8 @@ raw: ContextInspectionCollection,
 /**
  * Current history after production prompt normalization.
  */
-normalized: ContextInspectionCollection, normalization: ContextNormalizationSummary, };
+normalized: ContextInspectionCollection, normalization: ContextNormalizationSummary,
+/**
+ * Latest request attempt and latest request sent at the transport boundary.
+ */
+request: ModelRequestInspection, };

@@ -1490,7 +1490,7 @@ impl ModelClientSession {
                     self.client
                         .state
                         .request_observer
-                        .record_stream_opened(observed_attempt);
+                        .record_sent(observed_attempt);
                     let (stream, _) = map_response_stream(
                         stream,
                         request_session_telemetry,
@@ -1736,7 +1736,7 @@ impl ModelClientSession {
             self.client
                 .state
                 .request_observer
-                .record_stream_opened(observed_attempt);
+                .record_sent(observed_attempt);
             let (stream, last_request_rx) = map_response_stream(
                 stream_result,
                 request_session_telemetry,

@@ -14,14 +14,14 @@ fn overlapping_attempts_keep_latest_status_and_newest_actual_separate() {
         .expect("observer state lock")
         .latest_attempt = Some(second.clone());
 
-    observer.record_stream_opened(Some(ModelRequestAttempt(first.clone())));
-    let mut opened_first = first;
-    opened_first.status = ModelRequestAttemptStatus::StreamOpened;
+    observer.record_sent(Some(ModelRequestAttempt(first.clone())));
+    let mut sent_first = first;
+    sent_first.status = ModelRequestAttemptStatus::Sent;
     assert_eq!(
         observer.inspect(ContextInspectionLimits::default()),
         ModelRequestInspection {
             latest_attempt: Some(second.clone()),
-            last_actual: Some(opened_first.clone()),
+            last_actual: Some(sent_first.clone()),
             current_normalized_matches_last_actual: None,
         }
     );
@@ -33,17 +33,16 @@ fn overlapping_attempts_keep_latest_status_and_newest_actual_separate() {
         observer.inspect(ContextInspectionLimits::default()),
         ModelRequestInspection {
             latest_attempt: Some(failed_second),
-            last_actual: Some(opened_first),
+            last_actual: Some(sent_first),
             current_normalized_matches_last_actual: None,
         }
     );
 }
 
 fn snapshot(sequence: u64) -> ModelRequestSnapshot {
-    let serialized_request = serde_json::to_vec(&serde_json::json!({
+    let request = serde_json::json!({
         "sequence": sequence,
-    }))
-    .expect("serialize request fixture");
+    });
     ModelRequestSnapshot::project(ModelRequestProjection {
         sequence,
         captured_at: 1,
@@ -53,7 +52,7 @@ fn snapshot(sequence: u64) -> ModelRequestSnapshot {
         transport_input_items: 0,
         model: "model",
         provider: "provider",
-        serialized_request: &serialized_request,
+        request: &request,
         normalized_input: &[],
         provider_input: &[],
         instructions: None,

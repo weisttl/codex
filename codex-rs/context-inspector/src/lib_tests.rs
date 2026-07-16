@@ -44,6 +44,51 @@ fn projection_is_metadata_only() -> Result<(), ContextInspectionError> {
 }
 
 #[test]
+fn projection_preserves_serialized_kinds_for_all_response_items()
+-> Result<(), ContextInspectionError> {
+    let items = vec![
+        ResponseItem::CompactionTrigger {},
+        ResponseItem::Other,
+        ResponseItem::AdditionalTools {
+            id: None,
+            role: "developer".to_string(),
+            tools: Vec::new(),
+        },
+    ];
+    let snapshot = CurrentContextSnapshot::project(
+        /*history_version*/ 0,
+        &items,
+        &items,
+        ContextInspectionLimits::default(),
+    )?;
+
+    assert_eq!(
+        snapshot.raw.items,
+        vec![
+            ContextInspectionItem {
+                index: 0,
+                kind: "compaction_trigger".to_string(),
+                role: None,
+                serialized_bytes: to_u64(serde_json::to_vec(&items[0])?.len()),
+            },
+            ContextInspectionItem {
+                index: 1,
+                kind: "unknown".to_string(),
+                role: None,
+                serialized_bytes: to_u64(serde_json::to_vec(&items[1])?.len()),
+            },
+            ContextInspectionItem {
+                index: 2,
+                kind: "additional_tools".to_string(),
+                role: Some("developer".to_string()),
+                serialized_bytes: to_u64(serde_json::to_vec(&items[2])?.len()),
+            },
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn item_limit_is_hard_capped() -> Result<(), ContextInspectionError> {
     let items = (0..(HARD_MAX_ITEMS + 1))
         .map(|index| message("user", &format!("item {index}")))

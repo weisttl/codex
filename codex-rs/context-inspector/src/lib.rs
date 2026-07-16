@@ -4,9 +4,9 @@
 //! history and the normalized history produced by the same path used for model requests.
 
 use std::collections::HashMap;
+use std::io::Write;
 
 use codex_protocol::models::ResponseItem;
-use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
@@ -28,7 +28,7 @@ pub const DEFAULT_MAX_ITEMS: usize = 128;
 pub const HARD_MAX_ITEMS: usize = 512;
 
 const MAX_METADATA_TEXT_BYTES: usize = 128;
-const COLLECTION_FINGERPRINT_VERSION: &[u8] = b"codex-context-items-v1\0";
+const COLLECTION_FINGERPRINT_VERSION: &[u8] = b"codex-context-items-v2\0";
 
 /// Limits applied while projecting a context snapshot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -135,7 +135,7 @@ pub struct CurrentContextSnapshot {
     pub normalized: ContextItemCollection,
     /// Identity-level summary of normalization effects.
     pub normalization: ContextNormalizationSummary,
-    /// Latest prepared request attempt and latest request that opened a provider response stream.
+    /// Latest prepared request attempt and latest request sent at the transport boundary.
     pub request: ModelRequestInspection,
 }
 
@@ -164,7 +164,7 @@ impl CurrentContextSnapshot {
     }
 
     /// Attaches the session's request observations and compares current normalized history with the
-    /// latest request that successfully opened a provider response stream.
+    /// latest request that was sent successfully at the transport boundary.
     pub fn with_request_inspection(mut self, mut request: ModelRequestInspection) -> Self {
         request.current_normalized_matches_last_actual = request
             .last_actual
@@ -178,7 +178,7 @@ impl CurrentContextSnapshot {
 /// Failure to create a context projection.
 #[derive(Debug, Error)]
 pub enum ContextInspectionError {
-    /// A response item could not be serialized or read back as metadata.
+    /// A response item could not be serialized as metadata.
     #[error("failed to serialize context inspection metadata: {0}")]
     Serialization(#[from] serde_json::Error),
 }
@@ -186,13 +186,6 @@ pub enum ContextInspectionError {
 pub(crate) struct CollectionProjection {
     pub(crate) collection: ContextItemCollection,
     pub(crate) item_fingerprints: Vec<[u8; 32]>,
-}
-
-#[derive(Deserialize)]
-struct SerializedItemMetadata {
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    role: Option<String>,
 }
 
 pub(crate) fn project_collection(
@@ -207,19 +200,20 @@ pub(crate) fn project_collection(
     collection_hasher.update(COLLECTION_FINGERPRINT_VERSION);
 
     for (index, item) in items.iter().enumerate() {
-        let serialized = serde_json::to_vec(item)?;
-        let serialized_bytes = to_u64(serialized.len());
+        let mut writer = ItemFingerprintWriter::default();
+        serde_json::to_writer(&mut writer, item)?;
+        let (serialized_bytes, item_fingerprint) = writer.finish();
         total_serialized_bytes = total_serialized_bytes.saturating_add(serialized_bytes);
         collection_hasher.update(serialized_bytes.to_be_bytes());
-        collection_hasher.update(&serialized);
-        item_fingerprints.push(Sha256::digest(&serialized).into());
+        collection_hasher.update(item_fingerprint);
+        item_fingerprints.push(item_fingerprint);
 
         if represented.len() < limits.max_items() {
-            let metadata: SerializedItemMetadata = serde_json::from_slice(&serialized)?;
+            let (kind, role) = item_kind_and_role(item);
             represented.push(ContextInspectionItem {
                 index: to_u64(index),
-                kind: bounded_metadata_text(metadata.kind.as_deref().unwrap_or("unknown")),
-                role: metadata.role.as_deref().map(bounded_metadata_text),
+                kind: kind.to_string(),
+                role: role.map(bounded_metadata_text),
                 serialized_bytes,
             });
         }
@@ -238,6 +232,52 @@ pub(crate) fn project_collection(
         },
         item_fingerprints,
     })
+}
+
+#[derive(Default)]
+struct ItemFingerprintWriter {
+    hasher: Sha256,
+    serialized_bytes: u64,
+}
+
+impl ItemFingerprintWriter {
+    fn finish(self) -> (u64, [u8; 32]) {
+        (self.serialized_bytes, self.hasher.finalize().into())
+    }
+}
+
+impl Write for ItemFingerprintWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.hasher.update(buf);
+        self.serialized_bytes = self.serialized_bytes.saturating_add(to_u64(buf.len()));
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn item_kind_and_role(item: &ResponseItem) -> (&'static str, Option<&str>) {
+    match item {
+        ResponseItem::AdditionalTools { role, .. } => ("additional_tools", Some(role)),
+        ResponseItem::Message { role, .. } => ("message", Some(role)),
+        ResponseItem::AgentMessage { .. } => ("agent_message", None),
+        ResponseItem::Reasoning { .. } => ("reasoning", None),
+        ResponseItem::LocalShellCall { .. } => ("local_shell_call", None),
+        ResponseItem::FunctionCall { .. } => ("function_call", None),
+        ResponseItem::ToolSearchCall { .. } => ("tool_search_call", None),
+        ResponseItem::FunctionCallOutput { .. } => ("function_call_output", None),
+        ResponseItem::CustomToolCall { .. } => ("custom_tool_call", None),
+        ResponseItem::CustomToolCallOutput { .. } => ("custom_tool_call_output", None),
+        ResponseItem::ToolSearchOutput { .. } => ("tool_search_output", None),
+        ResponseItem::WebSearchCall { .. } => ("web_search_call", None),
+        ResponseItem::ImageGenerationCall { .. } => ("image_generation_call", None),
+        ResponseItem::Compaction { .. } => ("compaction", None),
+        ResponseItem::CompactionTrigger { .. } => ("compaction_trigger", None),
+        ResponseItem::ContextCompaction { .. } => ("context_compaction", None),
+        ResponseItem::Other => ("unknown", None),
+    }
 }
 
 fn summarize_normalization(
